@@ -29,7 +29,11 @@ const css = `
 .gal-album-info-text{flex:1}
 .gal-album-info-name{font-size:.95rem;font-weight:700;color:#E8E4DB;margin-bottom:.2rem}
 .gal-album-info-desc{font-size:.75rem;color:#6A665C}
-.gal-album-info-actions{display:flex;gap:.4rem}
+.gal-album-info-actions{display:flex;gap:.4rem;align-items:center}
+.gal-album-cover-wrap{display:flex;align-items:center;gap:.6rem;margin-top:.5rem}
+.gal-album-cover-img{width:60px;height:40px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.06)}
+.gal-album-cover-btn{position:relative;overflow:hidden}
+.gal-album-cover-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .gal-upload-zone{border:2px dashed rgba(255,255,255,.06);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:border .2s;position:relative;margin-bottom:1.5rem}
 .gal-upload-zone:hover{border-color:rgba(201,169,110,.2)}
 .gal-upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -59,6 +63,11 @@ const css = `
 .gal-confirm{background:#111;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:1.5rem;max-width:360px;width:90%;text-align:center;direction:rtl}
 .gal-confirm p{color:#E8E4DB;font-size:.85rem;margin-bottom:1.2rem}
 .gal-confirm-actions{display:flex;gap:.5rem;justify-content:center}
+.gal-file-zone{border:2px dashed rgba(255,255,255,.06);border-radius:10px;padding:1rem;text-align:center;cursor:pointer;transition:border .2s;position:relative}
+.gal-file-zone:hover{border-color:rgba(201,169,110,.2)}
+.gal-file-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.gal-file-hint{font-size:.7rem;color:#6A665C;margin-top:.3rem}
+.gal-file-preview{width:80px;height:50px;object-fit:cover;border-radius:6px;margin-top:.5rem}
 @media(max-width:768px){
   .gal-page{flex-direction:column}
   .gal-sidebar{width:100%;max-height:200px;position:static;display:flex;flex-wrap:wrap;gap:.5rem}
@@ -87,13 +96,16 @@ export default function DashGalleryPage() {
   const [uploadProgress, setUploadProgress] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null) // { type:'album'|'photo', item }
   const [editingPhoto, setEditingPhoto] = useState({}) // { [photoId]: { title, description } }
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState(null)
+  const [uploadingCover, setUploadingCover] = useState(false)
 
   const fetchAlbums = useCallback(async () => {
     setLoading(true)
     const { data, error: err } = await supabase
       .from('albums')
       .select('*')
-      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: false })
     if (err) {
       setError('حدث خطأ في تحميل الألبومات')
       console.error(err)
@@ -138,12 +150,34 @@ export default function DashGalleryPage() {
   const openAddAlbum = (categoryId) => {
     setAlbumModal({ mode: 'add', categoryId })
     setAlbumForm({ title: '', description: '' })
+    setCoverFile(null)
+    setCoverPreview(null)
   }
 
   const openEditAlbum = () => {
     if (!selectedAlbum) return
     setAlbumModal({ mode: 'edit', categoryId: selectedAlbum.category_id, album: selectedAlbum })
     setAlbumForm({ title: selectedAlbum.title || '', description: selectedAlbum.description || '' })
+    setCoverFile(null)
+    setCoverPreview(selectedAlbum.cover_image_url || null)
+  }
+
+  const handleCoverFileChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  const uploadCoverImage = async (file) => {
+    const ext = file.name.split('.').pop()
+    const fileName = `covers/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`
+    const { error: upErr } = await supabase.storage
+      .from('gallery')
+      .upload(fileName, file, { cacheControl: '3600', upsert: false })
+    if (upErr) throw upErr
+    const { data: urlData } = supabase.storage.from('gallery').getPublicUrl(fileName)
+    return urlData.publicUrl
   }
 
   const saveAlbum = async () => {
@@ -151,31 +185,61 @@ export default function DashGalleryPage() {
     setSaving(true)
     setError(null)
     try {
+      let coverUrl = selectedAlbum?.cover_image_url || null
+      if (coverFile) {
+        coverUrl = await uploadCoverImage(coverFile)
+      }
+
       if (albumModal.mode === 'add') {
         const { error: err } = await supabase.from('albums').insert([{
           category_id: albumModal.categoryId,
           title: albumForm.title.trim(),
           description: albumForm.description.trim(),
+          cover_image_url: coverUrl,
           display_order: albums.filter(a => a.category_id === albumModal.categoryId).length,
         }])
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('albums').update({
+        const payload = {
           title: albumForm.title.trim(),
           description: albumForm.description.trim(),
-        }).eq('id', albumModal.album.id)
+        }
+        if (coverFile) payload.cover_image_url = coverUrl
+        const { error: err } = await supabase.from('albums').update(payload).eq('id', albumModal.album.id)
         if (err) throw err
         if (selectedAlbum && selectedAlbum.id === albumModal.album.id) {
-          setSelectedAlbum({ ...selectedAlbum, title: albumForm.title.trim(), description: albumForm.description.trim() })
+          setSelectedAlbum({ ...selectedAlbum, ...payload, cover_image_url: coverUrl || selectedAlbum.cover_image_url })
         }
       }
       setAlbumModal(null)
+      setCoverFile(null)
+      setCoverPreview(null)
       fetchAlbums()
     } catch (err) {
-      setError('حدث خطأ أثناء حفظ الألبوم')
+      setError(err.message || 'حدث خطأ أثناء حفظ الألبوم')
       console.error(err)
     }
     setSaving(false)
+  }
+
+  // Update album cover directly from the info bar
+  const handleAlbumCoverUpdate = async (e) => {
+    const file = e.target.files[0]
+    if (!file || !selectedAlbum) return
+    setUploadingCover(true)
+    setError(null)
+    try {
+      const coverUrl = await uploadCoverImage(file)
+      const { error: err } = await supabase.from('albums').update({ cover_image_url: coverUrl }).eq('id', selectedAlbum.id)
+      if (err) throw err
+      setSelectedAlbum({ ...selectedAlbum, cover_image_url: coverUrl })
+      fetchAlbums()
+    } catch (err) {
+      setError(err.message || 'حدث خطأ أثناء تحديث صورة الغلاف')
+      console.error(err)
+    }
+    setUploadingCover(false)
+    e.target.value = ''
   }
 
   const deleteAlbum = async () => {
@@ -203,13 +267,13 @@ export default function DashGalleryPage() {
       setConfirmDelete(null)
       fetchAlbums()
     } catch (err) {
-      setError('حدث خطأ أثناء حذف الألبوم')
+      setError(err.message || 'حدث خطأ أثناء حذف الألبوم')
       console.error(err)
       setConfirmDelete(null)
     }
   }
 
-  // Photo upload
+  // Photo upload - supports multiple files
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files)
     if (!files.length || !selectedAlbum) return
@@ -220,11 +284,11 @@ export default function DashGalleryPage() {
         const file = files[i]
         setUploadProgress(`جارٍ رفع ${i + 1} من ${files.length}...`)
         const ext = file.name.split('.').pop()
-        const fileName = `${selectedAlbum.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const fileName = `${selectedAlbum.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
         const { error: upErr } = await supabase.storage
           .from('gallery')
           .upload(fileName, file, { cacheControl: '3600', upsert: false })
-        if (upErr) throw upErr
+        if (upErr) throw new Error(`خطأ في رفع "${file.name}": ${upErr.message}`)
         const { data: urlData } = supabase.storage.from('gallery').getPublicUrl(fileName)
         const { error: insertErr } = await supabase.from('photos').insert([{
           album_id: selectedAlbum.id,
@@ -233,12 +297,12 @@ export default function DashGalleryPage() {
           description: '',
           display_order: photos.length + i,
         }])
-        if (insertErr) throw insertErr
+        if (insertErr) throw new Error(`خطأ في حفظ بيانات الصورة: ${insertErr.message}`)
       }
       setUploadProgress('')
       fetchPhotos(selectedAlbum.id)
     } catch (err) {
-      setError('حدث خطأ أثناء رفع الصور')
+      setError(err.message || 'حدث خطأ أثناء رفع الصور')
       console.error(err)
     }
     setUploading(false)
@@ -257,7 +321,7 @@ export default function DashGalleryPage() {
       }).eq('id', photo.id)
       if (err) throw err
     } catch (err) {
-      setError('حدث خطأ أثناء تحديث الصورة')
+      setError(err.message || 'حدث خطأ أثناء تحديث الصورة')
       console.error(err)
     }
   }
@@ -276,7 +340,7 @@ export default function DashGalleryPage() {
       setConfirmDelete(null)
       if (selectedAlbum) fetchPhotos(selectedAlbum.id)
     } catch (err) {
-      setError('حدث خطأ أثناء حذف الصورة')
+      setError(err.message || 'حدث خطأ أثناء حذف الصورة')
       console.error(err)
       setConfirmDelete(null)
     }
@@ -340,6 +404,15 @@ export default function DashGalleryPage() {
                 <div className="gal-album-info-text">
                   <div className="gal-album-info-name">{selectedAlbum.title}</div>
                   {selectedAlbum.description && <div className="gal-album-info-desc">{selectedAlbum.description}</div>}
+                  <div className="gal-album-cover-wrap">
+                    {selectedAlbum.cover_image_url && (
+                      <img src={selectedAlbum.cover_image_url} alt="" className="gal-album-cover-img" />
+                    )}
+                    <div className="gal-album-cover-btn gal-btn gal-btn-ghost gal-btn-sm" style={{ position: 'relative', overflow: 'hidden' }}>
+                      <input type="file" accept="image/*" onChange={handleAlbumCoverUpdate} disabled={uploadingCover} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                      {uploadingCover ? 'جارٍ الرفع...' : (selectedAlbum.cover_image_url ? 'تغيير الغلاف' : 'إضافة غلاف')}
+                    </div>
+                  </div>
                 </div>
                 <div className="gal-album-info-actions">
                   <button className="gal-btn gal-btn-ghost gal-btn-sm" onClick={openEditAlbum}>تعديل</button>
@@ -351,7 +424,7 @@ export default function DashGalleryPage() {
               <div className="gal-upload-zone">
                 <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} disabled={uploading} />
                 <div className="gal-upload-icon">+</div>
-                <div className="gal-upload-text">اضغط أو اسحب الصور لرفعها</div>
+                <div className="gal-upload-text">اضغط أو اسحب الصور لرفعها (يمكنك اختيار عدة صور)</div>
                 {uploadProgress && <div className="gal-upload-progress">{uploadProgress}</div>}
               </div>
 
@@ -375,7 +448,7 @@ export default function DashGalleryPage() {
                         />
                         <input
                           className="gal-photo-input"
-                          placeholder="وصف"
+                          placeholder="وصف الصورة"
                           value={editingPhoto[photo.id]?.description || ''}
                           onChange={(e) => setEditingPhoto({ ...editingPhoto, [photo.id]: { ...editingPhoto[photo.id], description: e.target.value } })}
                           onBlur={() => savePhotoDetails(photo)}
@@ -406,11 +479,22 @@ export default function DashGalleryPage() {
               <label className="gal-label">الوصف</label>
               <input className="gal-input" value={albumForm.description} onChange={(e) => setAlbumForm({ ...albumForm, description: e.target.value })} placeholder="وصف مختصر" />
             </div>
+            <div className="gal-field">
+              <label className="gal-label">صورة الغلاف</label>
+              <div className="gal-file-zone">
+                <input type="file" accept="image/*" onChange={handleCoverFileChange} />
+                {coverPreview ? (
+                  <img src={coverPreview} alt="" className="gal-file-preview" />
+                ) : (
+                  <div className="gal-file-hint">اضغط لاختيار صورة غلاف</div>
+                )}
+              </div>
+            </div>
             <div className="gal-modal-actions">
               <button className="gal-btn gal-btn-primary" onClick={saveAlbum} disabled={saving}>
                 {saving ? 'جارٍ الحفظ...' : (albumModal.mode === 'add' ? 'إضافة' : 'تحديث')}
               </button>
-              <button className="gal-btn gal-btn-ghost" onClick={() => setAlbumModal(null)} disabled={saving}>إلغاء</button>
+              <button className="gal-btn gal-btn-ghost" onClick={() => { setAlbumModal(null); setCoverFile(null); setCoverPreview(null) }} disabled={saving}>إلغاء</button>
             </div>
           </div>
         </div>

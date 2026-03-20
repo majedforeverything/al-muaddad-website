@@ -17,7 +17,7 @@ const css = `
 .inbox-dot.unread{background:#C9A96E}
 .inbox-dot.read{background:#6A665C;opacity:.4}
 .inbox-item-info{flex:1;min-width:0}
-.inbox-item-name{font-size:.85rem;font-weight:600;color:#E8E4DB;margin-bottom:.15rem}
+.inbox-item-name{font-size:.85rem;font-weight:600;color:#E8E4DB;margin-bottom:.15rem;display:flex;align-items:center;gap:.5rem}
 .inbox-item.unread .inbox-item-name{color:#C9A96E}
 .inbox-item-preview{font-size:.75rem;color:#6A665C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:500px}
 .inbox-item-meta{display:flex;flex-direction:column;align-items:flex-end;gap:.2rem;flex-shrink:0}
@@ -28,10 +28,10 @@ const css = `
 .inbox-expand-body{padding:.8rem 0;border-bottom:1px solid rgba(255,255,255,.03)}
 .inbox-expand-label{font-size:.68rem;color:#6A665C;margin-bottom:.3rem;font-weight:600}
 .inbox-expand-msg{font-size:.82rem;color:#E8E4DB;line-height:1.8;white-space:pre-wrap}
-.inbox-expand-row{display:flex;gap:1.5rem;padding:.6rem 0;flex-wrap:wrap}
+.inbox-expand-row{display:flex;gap:1.5rem;padding:.6rem 0;flex-wrap:wrap;align-items:center}
 .inbox-expand-detail{font-size:.78rem;color:#9E998E}
 .inbox-expand-detail strong{color:#E8E4DB;font-weight:600}
-.inbox-expand-actions{display:flex;gap:.4rem;padding-top:.6rem;justify-content:flex-end}
+.inbox-expand-actions{display:flex;gap:.4rem;padding-top:.6rem;justify-content:flex-end;align-items:center}
 .inbox-btn{padding:.5rem 1.2rem;border-radius:8px;border:none;cursor:pointer;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:.8rem;font-weight:600;transition:all .2s}
 .inbox-btn-danger{background:rgba(220,60,60,.15);color:#e05555;border:1px solid rgba(220,60,60,.2)}
 .inbox-btn-danger:hover{background:rgba(220,60,60,.25)}
@@ -45,7 +45,19 @@ const css = `
 .inbox-confirm{background:#111;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:1.5rem;max-width:360px;width:90%;text-align:center;direction:rtl}
 .inbox-confirm p{color:#E8E4DB;font-size:.85rem;margin-bottom:1.2rem}
 .inbox-confirm-actions{display:flex;gap:.5rem;justify-content:center}
+.inbox-status-badge{display:inline-block;padding:.12rem .5rem;border-radius:20px;font-size:.65rem;font-weight:600;white-space:nowrap}
+.inbox-status-new{background:rgba(201,169,110,.12);color:#C9A96E}
+.inbox-status-accepted{background:rgba(80,180,80,.12);color:#5cb85c}
+.inbox-status-rejected{background:rgba(220,60,60,.12);color:#e05555}
+.inbox-status-select{padding:.3rem .5rem;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03);color:#E8E4DB;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:.72rem;outline:none;cursor:pointer;direction:rtl}
+.inbox-status-select:focus{border-color:rgba(201,169,110,.3)}
 `
+
+const STATUS_MAP = {
+  'جديد': { label: 'جديد', className: 'inbox-status-new' },
+  'مقبول': { label: 'مقبول', className: 'inbox-status-accepted' },
+  'مرفوض': { label: 'مرفوض', className: 'inbox-status-rejected' },
+}
 
 export default function DashInboxPage() {
   const [submissions, setSubmissions] = useState([])
@@ -93,6 +105,20 @@ export default function DashInboxPage() {
     }
   }
 
+  const handleStatusChange = async (item, newStatus) => {
+    try {
+      const { error: err } = await supabase
+        .from('submissions')
+        .update({ status: newStatus })
+        .eq('id', item.id)
+      if (err) throw err
+      setSubmissions(prev => prev.map(s => s.id === item.id ? { ...s, status: newStatus } : s))
+    } catch (err) {
+      setError(err.message || 'حدث خطأ أثناء تحديث الحالة')
+      console.error(err)
+    }
+  }
+
   const handleDelete = async () => {
     if (!confirmDelete) return
     try {
@@ -102,14 +128,14 @@ export default function DashInboxPage() {
       if (expandedId === confirmDelete.id) setExpandedId(null)
       setSubmissions(prev => prev.filter(s => s.id !== confirmDelete.id))
     } catch (err) {
-      setError('حدث خطأ أثناء الحذف')
+      setError(err.message || 'حدث خطأ أثناء الحذف')
       console.error(err)
       setConfirmDelete(null)
     }
   }
 
   const formatDate = (d) => {
-    if (!d) return '—'
+    if (!d) return '\u2014'
     try {
       const date = new Date(d)
       const now = new Date()
@@ -125,6 +151,10 @@ export default function DashInboxPage() {
     } catch {
       return d
     }
+  }
+
+  const getStatusInfo = (status) => {
+    return STATUS_MAP[status] || STATUS_MAP['جديد']
   }
 
   const unreadCount = submissions.filter(s => !s.is_read).length
@@ -150,38 +180,58 @@ export default function DashInboxPage() {
           <div className="inbox-empty">لا توجد رسائل حالياً</div>
         ) : (
           <div className="inbox-list">
-            {submissions.map(item => (
-              <div key={item.id} className={`inbox-item${!item.is_read ? ' unread' : ''}`}>
-                <div className="inbox-item-header" onClick={() => toggleExpand(item)}>
-                  <span className={`inbox-dot ${item.is_read ? 'read' : 'unread'}`} />
-                  <div className="inbox-item-info">
-                    <div className="inbox-item-name">{item.name || 'بدون اسم'}</div>
-                    <div className="inbox-item-preview">{item.message || ''}</div>
+            {submissions.map(item => {
+              const statusInfo = getStatusInfo(item.status)
+              return (
+                <div key={item.id} className={`inbox-item${!item.is_read ? ' unread' : ''}`}>
+                  <div className="inbox-item-header" onClick={() => toggleExpand(item)}>
+                    <span className={`inbox-dot ${item.is_read ? 'read' : 'unread'}`} />
+                    <div className="inbox-item-info">
+                      <div className="inbox-item-name">
+                        {item.name || 'بدون اسم'}
+                        <span className={`inbox-status-badge ${statusInfo.className}`}>{statusInfo.label}</span>
+                      </div>
+                      <div className="inbox-item-preview">{item.message || ''}</div>
+                    </div>
+                    <div className="inbox-item-meta">
+                      <div className="inbox-item-date">{formatDate(item.created_at)}</div>
+                      {item.phone && <div className="inbox-item-phone">{item.phone}</div>}
+                    </div>
                   </div>
-                  <div className="inbox-item-meta">
-                    <div className="inbox-item-date">{formatDate(item.created_at)}</div>
-                    {item.phone && <div className="inbox-item-phone">{item.phone}</div>}
-                  </div>
-                </div>
 
-                {expandedId === item.id && (
-                  <div className="inbox-expand">
-                    <div className="inbox-expand-row">
-                      <div className="inbox-expand-detail"><strong>الاسم:</strong> {item.name || '—'}</div>
-                      <div className="inbox-expand-detail"><strong>الهاتف:</strong> <span style={{ direction: 'ltr', display: 'inline-block' }}>{item.phone || '—'}</span></div>
-                      <div className="inbox-expand-detail"><strong>التاريخ:</strong> {item.created_at ? new Date(item.created_at).toLocaleString('ar-SA') : '—'}</div>
+                  {expandedId === item.id && (
+                    <div className="inbox-expand">
+                      <div className="inbox-expand-row">
+                        <div className="inbox-expand-detail"><strong>الاسم:</strong> {item.name || '\u2014'}</div>
+                        <div className="inbox-expand-detail"><strong>الهاتف:</strong> <span style={{ direction: 'ltr', display: 'inline-block' }}>{item.phone || '\u2014'}</span></div>
+                        <div className="inbox-expand-detail"><strong>التاريخ:</strong> {item.created_at ? new Date(item.created_at).toLocaleString('ar-SA') : '\u2014'}</div>
+                      </div>
+                      <div className="inbox-expand-body">
+                        <div className="inbox-expand-label">الرسالة</div>
+                        <div className="inbox-expand-msg">{item.message || 'لا توجد رسالة'}</div>
+                      </div>
+                      <div className="inbox-expand-actions">
+                        <div className="inbox-expand-detail" style={{ marginLeft: 'auto' }}>
+                          <strong>الحالة:</strong>
+                          <select
+                            className="inbox-status-select"
+                            value={item.status || 'جديد'}
+                            onChange={(e) => { e.stopPropagation(); handleStatusChange(item, e.target.value) }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ marginRight: '.4rem' }}
+                          >
+                            <option value="جديد">جديد</option>
+                            <option value="مقبول">مقبول</option>
+                            <option value="مرفوض">مرفوض</option>
+                          </select>
+                        </div>
+                        <button className="inbox-btn inbox-btn-danger inbox-btn-sm" onClick={(e) => { e.stopPropagation(); setConfirmDelete(item) }}>حذف</button>
+                      </div>
                     </div>
-                    <div className="inbox-expand-body">
-                      <div className="inbox-expand-label">الرسالة</div>
-                      <div className="inbox-expand-msg">{item.message || 'لا توجد رسالة'}</div>
-                    </div>
-                    <div className="inbox-expand-actions">
-                      <button className="inbox-btn inbox-btn-danger inbox-btn-sm" onClick={(e) => { e.stopPropagation(); setConfirmDelete(item) }}>حذف</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 

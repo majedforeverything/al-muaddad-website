@@ -173,7 +173,7 @@ export default function DashNewsPage() {
       closeModal()
       fetchNews()
     } catch (err) {
-      setError('حدث خطأ أثناء الحفظ')
+      setError(err.message || 'حدث خطأ أثناء الحفظ')
       console.error(err)
     }
     setSaving(false)
