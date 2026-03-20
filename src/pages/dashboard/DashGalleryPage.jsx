@@ -77,9 +77,9 @@ const css = `
 `
 
 const FIXED_CATEGORIES = [
-  { id: 'events', title: 'المناسبات', filter: 'events' },
-  { id: 'holidays', title: 'الأعياد', filter: 'holidays' },
-  { id: 'memories', title: 'الذكريات', filter: 'memories' },
+  { id: 'events', title: 'المناسبات' },
+  { id: 'eids', title: 'الأعياد' },
+  { id: 'memories', title: 'الذكريات' },
 ]
 
 export default function DashGalleryPage() {
