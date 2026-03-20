@@ -104,14 +104,13 @@ const ELDERS=[
   {img:ELDER5,name:"مرزوق بن معضد"},
 ];
 
-const NEWS=[];
+// NEWS and GAL are loaded from Supabase dynamically in each component
 
 const TL=[
   {y:"",t:"نشأة القرية",d:"مورد الماء القديم في أم أرطاء هو ما استقطب الأهالي إلى هذا الموقع، وبدأت البيوت الأولى تُبنى حوله وتتوسع شيئاً فشيئاً حتى تشكّلت القرية"},{y:"",t:"بدايات الاستقرار",d:"تقسيم الأراضي بين الأسر وانتشار العائلات في أرجاء القرية، وبناء المسجد الجامع كمركز اجتماعي وديني لجمع الأهالي"},{y:"",t:"التعليم والتنمية",d:"وصول الخدمات التعليمية وافتتاح المدارس، ودخول الكهرباء والخدمات الصحية إلى القرية"},{y:"",t:"الطرق والمواصلات",d:"ربط أم أرطاء بشبكة الطرق الإقليمية المتصلة بمحافظة عفيف والمدينة المنورة والقصيم، مما كسر عزلة القرية وفتح آفاقاً جديدة لأبنائها"},{y:"",t:"أجيال تصدير نحو المدن الكبرى",d:"في ظل الأرطى طلعت أجيال حملت طموح قريتهم إلى كل مدينة — فمنهم الطبيب الذي يداوي، والمهندس الذي يبني، والقائد الذي يتصدر، ورجل الدولة الذي يخدم وطنه، ورجل الأعمال الذي يعمّر. غادرت أقدامهم أم أرطاء ولكنها لم تغادر قلوبهم"},{y:"",t:"الجذور لا تنسى أصولها",d:"مهما بعدت المسافات، تظل أم أرطاء البوصلة التي تعيد الجميع إلى بعضهم — في كل عيد ومناسبة في كل موعد تُفتح فيه أبواب الديار، وتُشعل المقران، ويلتقي الشمل ويبقى حبل الوصل ممدوداً بين الأجيال"},{y:"",t:"التوثيق الرقمي",d:"إطلاق الموقع الإلكتروني لتوثيق تاريخ وتراث أم أرطاء، حفاظاً على هذا الإرث العريق ويبقى للأجيال القادمة"}
 ];
 
-const GAL=[
-];
+// GAL loaded from Supabase
 
 // ─── Scroll reveal hook ───
 function useReveal(){
@@ -420,7 +419,14 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
 
 const SH=({s,t,p,center})=><div className={`sh${center?' sh-c':''}`}><div className="sh-s">{s}</div><h2 className="sh-t">{t}</h2>{p&&<p className="sh-p">{p}</p>}</div>;
 
-const Home=({go})=>(
+const Home=({go})=>{
+  const[homeNews,setHomeNews]=useState([]);
+  const[homeAlbums,setHomeAlbums]=useState([]);
+  useEffect(()=>{
+    supabase.from('news').select('*').eq('show_on_homepage',true).order('homepage_order').limit(4).then(({data})=>setHomeNews(data||[]));
+    supabase.from('albums').select('*,photos(id)').order('created_at',{ascending:false}).limit(6).then(({data})=>setHomeAlbums(data||[]));
+  },[]);
+  return(
 <div>
   <section className="hero" style={{background:'#000',display:'flex',alignItems:'center',justifyContent:'center',textAlign:'center',minHeight:'calc(100vh - 80px)',position:'relative',overflow:'hidden'}}>
     {/* Large Arta tree silhouette - right side */}
@@ -554,8 +560,8 @@ const Home=({go})=>(
 
   <section className="sec-news">
     <R><SH s="آخر المستجدات" t="الأخبار والأحداث" p="نوثّق أبرز أخبار وأحداث العائلة" center/></R>
-    <div className="ngrid">{NEWS.slice(0,2).map((n,i)=>(<R key={i} delay={i*.06}><div className="nc" onClick={()=>go('news')}><div className="nc-img" style={{background:n.g}}/><div className="nc-body"><h4>{n.title}</h4><p>{n.desc}</p><div className="nc-date">{n.date}</div></div></div></R>))}</div>
-    <div style={{textAlign:'center',marginTop:'2rem'}}><button className="cbtn" onClick={()=>go('news')}>عرض جميع الأخبار</button></div>
+    <div className="ngrid">{homeNews.map((n,i)=>(<R key={n.id} delay={i*.06}><div className="nc" onClick={()=>go('news')}><div className="nc-img" style={{background:n.cover_image_url?`url(${n.cover_image_url}) center/cover`:'linear-gradient(145deg,#1a1508,#0d0b04)'}}/><div className="nc-body"><h4>{n.title}</h4><p>{n.description}</p><div className="nc-date">{n.date}</div></div></div></R>))}</div>
+    {homeNews.length>0&&<div style={{textAlign:'center',marginTop:'2rem'}}><button className="cbtn" onClick={()=>go('news')}>عرض جميع الأخبار</button></div>}
   </section>
 
   <div className="sec-div sec-div-4"><div className="sec-div-line"/></div>
@@ -574,18 +580,18 @@ const Home=({go})=>(
   <section style={{background:'linear-gradient(180deg,#000 0%,#0A0908 50%,#000 100%)',padding:'5rem clamp(2rem,6vw,5rem)'}}>
     <R><SH s="لحظات خالدة" t="معرض الصور" p="نوثّق اللحظات المميزة لعائلة آل معضد" center/></R>
     <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'1rem',marginTop:'2rem',maxWidth:'700px',margin:'2rem auto 0'}}>
-      {GAL.flatMap(c=>c.albums).slice(0,6).map((a,i)=>(
-        <R key={a.id} delay={i*.06}><div style={{cursor:'pointer',transition:'all .3s ease'}} onClick={()=>go('gallery',a)} onMouseOver={e=>e.currentTarget.style.transform='translateY(-4px)'} onMouseOut={e=>e.currentTarget.style.transform='none'}>
-          <div style={{aspectRatio:'1',borderRadius:'10px',background:a.g,border:'1px solid rgba(255,255,255,.04)',marginBottom:'.5rem'}}/>
+      {homeAlbums.map((a,i)=>(
+        <R key={a.id} delay={i*.06}><div style={{cursor:'pointer',transition:'all .3s ease'}} onClick={()=>go('gallery')} onMouseOver={e=>e.currentTarget.style.transform='translateY(-4px)'} onMouseOut={e=>e.currentTarget.style.transform='none'}>
+          <div style={{aspectRatio:'1',borderRadius:'10px',background:a.cover_image_url?`url(${a.cover_image_url}) center/cover`:'linear-gradient(145deg,#1a1508,#0d0b04)',border:'1px solid rgba(255,255,255,.04)',marginBottom:'.5rem'}}/>
           <div style={{fontSize:'.75rem',fontWeight:700,color:'var(--t1)'}}>{a.title}</div>
-          <div style={{fontSize:'.6rem',color:'var(--t3)',marginTop:'.15rem'}}>{a.photos.length} {pn(a.photos.length,'صورة','صور')}</div>
+          <div style={{fontSize:'.6rem',color:'var(--t3)',marginTop:'.15rem'}}>{a.photos?.length||0} {pn(a.photos?.length||0,'صورة','صور')}</div>
         </div></R>
       ))}
     </div>
     <div style={{textAlign:'center',marginTop:'2.5rem'}}><button className="cbtn" onClick={()=>go('gallery')}>عرض المعرض كاملاً</button></div>
   </section>
 </div>
-);
+)};
 
 const TreePg=()=>{
   const[exp,setExp]=useState({});
@@ -674,26 +680,59 @@ const TreePg=()=>{
 
 const HistPg=()=>(<div className="hist"><SH s="قصة المكان" t="تاريخ أم أرطاء" p="قرية من محافظة عفيف بمنطقة الرياض — اكتسبت اسمها من شجرة الأرطى الصحراوية التي تنتشر بكثافة في المنطقة" center/><div className="tl">{TL.map((t,i)=><R key={i} delay={i*.06}><div className="tli"><div className="tl-d"/><div className="tl-y">{t.y}</div><div className="tl-t">{t.t}</div><div className="tl-desc">{t.d}</div></div></R>)}</div></div>);
 
-const GalPg=({initialAlbum})=>{const[gf,setGf]=useState('all');const[sel,setSel]=useState(initialAlbum||null);const[lb,setLb]=useState(null);const cats=['all','المناسبات','الأعياد','الذكريات'];const folders=gf==='all'?GAL:GAL.filter(f=>f.filter===gf);
-if(sel)return(<div className="album-detail" style={{background:"linear-gradient(180deg,#000 0%,#0C0B08 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}>
-  <button className="album-detail-back" onClick={()=>setSel(null)}>→ رجوع للمعرض</button>
-  <div className="album-detail-title">{sel.title}</div>
-  <div className="album-detail-desc">{sel.desc}</div>
-  <div className="album-detail-count">{sel.photos.length} {pn(sel.photos.length,'صورة','صور')}</div>
-  <div className="album-photos">{sel.photos.map((p,i)=><R key={i} delay={i*.03}><div className="album-photo" style={{background:p.g}} onClick={()=>setLb(p)}/></R>)}</div>
-  {lb&&<div className="lb" onClick={()=>setLb(null)}><button className="lb-x" onClick={()=>setLb(null)}>✕</button><div className="lb-box"><div className="lb-img" style={{background:lb.g,width:'90vw',maxWidth:600,aspectRatio:'1'}}/></div></div>}
-</div>);
-return(<div className="gal"><SH s="لحظات خالدة" t="معرض الذكريات" center/><div className="gf">{cats.map(c=><button key={c} className={`gfb ${gf===c?'on':''}`} onClick={()=>setGf(c)}>{c==='all'?'الكل':c}</button>)}</div><div className="albums">{folders.map(f=>(<div key={f.id} className="acat"><div className="acat-hdr"><div className="acat-dot" style={{background:'var(--accent)'}}/><div className="acat-name">{f.title}</div></div><div className="agrid">{f.albums.map(a=><R key={a.id}><div className="album" onClick={()=>{setSel(a);window.scrollTo(0,0)}}><div className="album-img" style={{background:a.g}}/><div className="album-body"><div className="album-t">{a.title}</div><div className="album-c">{a.photos.length} {pn(a.photos.length,'صورة','صور')}</div></div></div></R>)}</div></div>))}</div></div>)};
+const GalPg=({initialAlbum})=>{
+  const[gf,setGf]=useState('all');const[sel,setSel]=useState(null);const[lb,setLb]=useState(null);const[lbIdx,setLbIdx]=useState(0);
+  const[cats,setCats]=useState([]);const[albums,setAlbums]=useState([]);const[photos,setPhotos]=useState([]);const[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    Promise.all([
+      supabase.from('categories').select('*'),
+      supabase.from('albums').select('*,photos(id)').order('created_at',{ascending:false})
+    ]).then(([{data:c},{data:a}])=>{setCats(c||[]);setAlbums(a||[]);setLoading(false)});
+  },[]);
+  const openAlbum=async(a)=>{
+    const{data}=await supabase.from('photos').select('*').eq('album_id',a.id).order('display_order');
+    setPhotos(data||[]);setSel({...a,loadedPhotos:data||[]});window.scrollTo(0,0);
+  };
+  const openLb=(idx)=>{setLbIdx(idx);setLb(true)};
+  const filteredAlbums=gf==='all'?albums:albums.filter(a=>cats.find(c=>c.id===a.category_id)?.filter===gf);
+  const grouped=cats.map(c=>({...c,albums:filteredAlbums.filter(a=>a.category_id===c.id)})).filter(g=>g.albums.length>0);
 
-const NewsPg=()=>{const[sel,setSel]=useState(null);
+  if(sel){const pp=sel.loadedPhotos||[];return(<div className="album-detail" style={{background:"linear-gradient(180deg,#000 0%,#0C0B08 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}>
+    <button className="album-detail-back" onClick={()=>setSel(null)}>→ رجوع للمعرض</button>
+    <div className="album-detail-title">{sel.title}</div>
+    <div className="album-detail-desc">{sel.description}</div>
+    <div className="album-detail-count">{pp.length} {pn(pp.length,'صورة','صور')}</div>
+    <div className="album-photos">{pp.map((p,i)=><R key={p.id} delay={i*.03}><div className="album-photo" style={{background:p.image_url?`url(${p.image_url}) center/cover`:'#111'}} onClick={()=>openLb(i)}/></R>)}</div>
+    {lb&&pp[lbIdx]&&<div className="lb" onClick={()=>setLb(false)}>
+      <button className="lb-x" onClick={(e)=>{e.stopPropagation();setLb(false)}}>✕</button>
+      {lbIdx>0&&<button onClick={(e)=>{e.stopPropagation();setLbIdx(lbIdx-1)}} style={{position:'absolute',right:'1rem',top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,.1)',border:'none',color:'#fff',width:40,height:40,borderRadius:'50%',fontSize:'1.2rem',cursor:'pointer',zIndex:2001}}>→</button>}
+      {lbIdx<pp.length-1&&<button onClick={(e)=>{e.stopPropagation();setLbIdx(lbIdx+1)}} style={{position:'absolute',left:'1rem',top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,.1)',border:'none',color:'#fff',width:40,height:40,borderRadius:'50%',fontSize:'1.2rem',cursor:'pointer',zIndex:2001}}>←</button>}
+      <div className="lb-box" onClick={e=>e.stopPropagation()}>
+        <img src={pp[lbIdx].image_url} alt="" style={{width:'90vw',maxWidth:600,maxHeight:'80vh',objectFit:'contain',borderRadius:12}}/>
+        {pp[lbIdx].title&&<div style={{color:'#fff',fontSize:'.9rem',fontWeight:700,marginTop:'.6rem',textAlign:'center'}}>{pp[lbIdx].title}</div>}
+        {pp[lbIdx].description&&<div style={{color:'#9E998E',fontSize:'.75rem',marginTop:'.3rem',textAlign:'center'}}>{pp[lbIdx].description}</div>}
+        <div style={{color:'#6A665C',fontSize:'.6rem',marginTop:'.5rem',textAlign:'center'}}>{lbIdx+1} / {pp.length}</div>
+      </div>
+    </div>}
+  </div>)}
+
+  if(loading)return(<div style={{minHeight:'calc(100vh - 80px)',display:'flex',alignItems:'center',justifyContent:'center',background:'#000',color:'var(--accent)'}}>جاري التحميل...</div>);
+  const filterCats=['all','المناسبات','الأعياد','الذكريات'];
+  return(<div className="gal"><SH s="لحظات خالدة" t="معرض الذكريات" center/><div className="gf">{filterCats.map(c=><button key={c} className={`gfb ${gf===c?'on':''}`} onClick={()=>setGf(c)}>{c==='all'?'الكل':c}</button>)}</div>
+  {grouped.length===0?<div style={{textAlign:'center',color:'var(--t3)',padding:'3rem'}}>لا توجد ألبومات حالياً</div>:
+  <div className="albums">{grouped.map(f=>(<div key={f.id} className="acat"><div className="acat-hdr"><div className="acat-dot" style={{background:'var(--accent)'}}/><div className="acat-name">{f.title}</div></div><div className="agrid">{f.albums.map(a=><R key={a.id}><div className="album" onClick={()=>openAlbum(a)}><div className="album-img" style={{background:a.cover_image_url?`url(${a.cover_image_url}) center/cover`:'linear-gradient(145deg,#1a1508,#0d0b04)'}}/><div className="album-body"><div className="album-t">{a.title}</div><div className="album-c">{a.photos?.length||0} {pn(a.photos?.length||0,'صورة','صور')}</div></div></div></R>)}</div></div>))}</div>}</div>)};
+
+const NewsPg=()=>{const[sel,setSel]=useState(null);const[news,setNews]=useState([]);const[loading,setLoading]=useState(true);
+useEffect(()=>{supabase.from('news').select('*').order('created_at',{ascending:false}).then(({data})=>{setNews(data||[]);setLoading(false)})},[]);
 if(sel)return(<div className="news-detail" style={{background:"linear-gradient(180deg,#000 0%,#0A0A08 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}>
   <button className="news-detail-back" onClick={()=>setSel(null)}>→ رجوع للأخبار</button>
-  <div className="news-detail-img" style={{background:sel.g}}/>
+  {sel.cover_image_url&&<div className="news-detail-img" style={{background:`url(${sel.cover_image_url}) center/cover`}}/>}
   <div className="news-detail-date">{sel.date}</div>
   <div className="news-detail-title">{sel.title}</div>
   <div className="news-detail-body">{sel.body}</div>
 </div>);
-return(<div className="nwsp" style={{background:"linear-gradient(180deg,#000 0%,#0A0A08 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}><SH s="آخر المستجدات" t="الأخبار والأحداث" center/><div className="ngrid">{NEWS.map((n,i)=><R key={i} delay={i*.05}><div className="nc" onClick={()=>{setSel(n);window.scrollTo(0,0)}}><div className="nc-img" style={{background:n.g}}/><div className="nc-body"><h4>{n.title}</h4><p>{n.desc}</p><div className="nc-date">{n.date}</div></div></div></R>)}</div></div>)};
+if(loading)return(<div style={{minHeight:'calc(100vh - 80px)',display:'flex',alignItems:'center',justifyContent:'center',background:'#000',color:'var(--accent)'}}>جاري التحميل...</div>);
+return(<div className="nwsp" style={{background:"linear-gradient(180deg,#000 0%,#0A0A08 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}><SH s="آخر المستجدات" t="الأخبار والأحداث" center/>{news.length===0?<div style={{textAlign:'center',color:'var(--t3)',padding:'3rem'}}>لا توجد أخبار حالياً</div>:<div className="ngrid">{news.map((n,i)=><R key={n.id} delay={i*.05}><div className="nc" onClick={()=>{setSel(n);window.scrollTo(0,0)}}><div className="nc-img" style={{background:n.cover_image_url?`url(${n.cover_image_url}) center/cover`:'linear-gradient(145deg,#1a1508,#0d0b04)'}}/><div className="nc-body"><h4>{n.title}</h4><p>{n.description}</p><div className="nc-date">{n.date}</div></div></div></R>)}</div>}</div>)};
 
 const DirPg=()=>{const[ds,setDs]=useState('');return(<div className="dirp" style={{background:"linear-gradient(180deg,#000 0%,#080806 50%,#000 100%)",minHeight:"calc(100vh - 80px)"}}><SH s="أبناء آل معضد" t="دليل العائلة" center/><div className="dir-sb"><span style={{opacity:.3}}>🔍</span><input placeholder="ابحث عن اسم..." value={ds} onChange={e=>setDs(e.target.value)}/></div>{FAMILY.map(b=>{const gcN=b.grandchildren.map(gc=>gc.name);const gcSF=[];b.grandchildren.forEach(gc=>gc.sons.forEach(s=>gcSF.push({name:s,father:gc.name})));const ggA=[];b.grandchildren.forEach(gc=>{if(gc.greatGrandsons)Object.entries(gc.greatGrandsons).forEach(([f,a])=>a.forEach(g=>ggA.push({name:g,father:f})))});const f1=ds?gcN.filter(n=>n.includes(ds)):gcN;const f2=ds?gcSF.filter(p=>p.name.includes(ds)):gcSF;const f3=ds?ggA.filter(p=>p.name.includes(ds)):ggA;if(ds&&!f1.length&&!f2.length&&!f3.length)return null;const tot=gcN.length+gcSF.length+ggA.length;return(<R key={b.id}><div className="dbr"><div className="dbr-hdr"><div className="dbr-dot" style={{background:'var(--accent)'}}/><div className="dbr-name">{b.name}</div><div className="dbr-count">{tot} {pn(tot,'فرد','أفراد')}</div></div><div className="dbr-body"><div className="dbr-row"><div className="dbr-rl">الأبناء <span>{f1.length}</span></div><div className="dbr-ns">{f1.map((n,i)=><div key={i} className={`dbr-n${ds&&n.includes(ds)?' hl':''}`}>{n}</div>)}</div></div>{f2.length>0&&<><div className="dbr-sep"/><div className="dbr-row"><div className="dbr-rl">الأحفاد <span>{f2.length}</span></div><div className="dbr-ns">{f2.map((p,i)=><div key={i} className={`dbr-n${ds&&p.name.includes(ds)?' hl':''}`}>{p.name}<span className="dbr-nf">({p.father})</span></div>)}</div></div></>}{f3.length>0&&<><div className="dbr-sep"/><div className="dbr-row"><div className="dbr-rl">أبناء الأحفاد <span>{f3.length}</span></div><div className="dbr-ns">{f3.map((p,i)=><div key={i} className={`dbr-n${ds&&p.name.includes(ds)?' hl':''}`}>{p.name}<span className="dbr-nf">({p.father})</span></div>)}</div></div></>}</div></div></R>)})}</div>)};
 
