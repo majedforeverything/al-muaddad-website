@@ -41,8 +41,10 @@ const css = `
 .gal-upload-text{font-size:.78rem;color:#6A665C}
 .gal-upload-progress{font-size:.72rem;color:#C9A96E;margin-top:.5rem}
 .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem}
-.gal-photo-card{background:#0C0B08;border:1px solid rgba(255,255,255,.04);border-radius:10px;overflow:hidden;transition:border .2s}
+.gal-photo-card{background:#0C0B08;border:1px solid rgba(255,255,255,.04);border-radius:10px;overflow:hidden;transition:all .2s;cursor:grab}
 .gal-photo-card:hover{border-color:rgba(255,255,255,.08)}
+.gal-photo-card:active{cursor:grabbing}
+.gal-photo-card.drag-over{border-color:rgba(201,169,110,.4);transform:scale(1.02)}
 .gal-photo-img{width:100%;height:140px;object-fit:cover;display:block}
 .gal-photo-body{padding:.7rem}
 .gal-photo-input{width:100%;padding:.3rem .5rem;border-radius:6px;border:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.02);color:#E8E4DB;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:.7rem;margin-bottom:.3rem;outline:none;box-sizing:border-box}
@@ -346,6 +348,48 @@ export default function DashGalleryPage() {
     }
   }
 
+  // Drag & Drop reorder
+  const [dragId, setDragId] = useState(null)
+
+  const handleDragStart = (e, photoId) => {
+    setDragId(photoId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.currentTarget.style.opacity = '0.4'
+  }
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    setDragId(null)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = async (e, targetId) => {
+    e.preventDefault()
+    if (!dragId || dragId === targetId) return
+    const oldIdx = photos.findIndex(p => p.id === dragId)
+    const newIdx = photos.findIndex(p => p.id === targetId)
+    if (oldIdx === -1 || newIdx === -1) return
+
+    const reordered = [...photos]
+    const [moved] = reordered.splice(oldIdx, 1)
+    reordered.splice(newIdx, 0, moved)
+    setPhotos(reordered)
+
+    // Save new order to DB
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        await supabase.from('photos').update({ display_order: i }).eq('id', reordered[i].id)
+      }
+    } catch (err) {
+      setError('حدث خطأ أثناء حفظ الترتيب')
+      if (selectedAlbum) fetchPhotos(selectedAlbum.id)
+    }
+  }
+
   const handleConfirmDelete = () => {
     if (!confirmDelete) return
     if (confirmDelete.type === 'album') deleteAlbum()
@@ -436,7 +480,7 @@ export default function DashGalleryPage() {
               ) : (
                 <div className="gal-grid">
                   {photos.map(photo => (
-                    <div className="gal-photo-card" key={photo.id}>
+                    <div className="gal-photo-card" key={photo.id} draggable onDragStart={(e)=>handleDragStart(e,photo.id)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e,photo.id)}>
                       <img src={photo.image_url} alt={photo.title || ''} className="gal-photo-img" loading="lazy" />
                       <div className="gal-photo-body">
                         <input
